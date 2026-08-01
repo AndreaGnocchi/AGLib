@@ -1,0 +1,154 @@
+#ifndef AG_LIB_DS_MAP
+#define AG_LIB_DS_MAP
+
+#include <string.h>
+#include "../../include/aglib_arena.h"
+
+// ——— Map ————————————————————————————————————————————————————————————————————————————————————————
+
+#define Map(Tk, Tv, name, hash_fn, eq_fn)                                                         \
+  typedef struct {                                                                                \
+    Tk     key;                                                                                   \
+    Tv     val;                                                                                   \
+    size_t psl;                                                                                   \
+    bool   active;                                                                                \
+  } name##Entry;                                                                                  \
+                                                                                                  \
+  typedef struct {                                                                                \
+    name##Entry* entries;                                                                         \
+    size_t       capacity;                                                                        \
+    size_t       size;                                                                            \
+    sArena*      a;                                                                               \
+  } name;                                                                                         \
+                                                                                                  \
+  static inline bool name##_resize(name* hm, size_t newCap);                                      \
+                                                                                                  \
+  static inline void name##_init(sArena* a, name* hm, size_t initCap) {                           \
+    if (!a || !hm || initCap == 0) return;                                                        \
+                                                                                                  \
+    hm->capacity = initCap;                                                                       \
+    hm->size     = 0;                                                                             \
+    hm->a        = a;                                                                             \
+    hm->entries  = (name##Entry*)arena_alloc(a, sizeof(name##Entry) * initCap, true);             \
+  }                                                                                               \
+                                                                                                  \
+  static inline bool name##_insert(name* hm, Tk key, Tv val) {                                    \
+    if (!hm) return false;                                                                        \
+                                                                                                  \
+    if (hm->size * 4 >= hm->capacity * 3) {                                                        \
+      if (!name##_resize(hm, hm->capacity * 2)) return false;                                     \
+    }                                                                                             \
+                                                                                                  \
+    name##Entry cur;                                                                              \
+    cur.key    = key;                                                                             \
+    cur.val    = val;                                                                             \
+    cur.psl    = 0;                                                                               \
+    cur.active = true;                                                                            \
+                                                                                                  \
+    size_t idx = hash_fn(key) % hm->capacity;                                                     \
+    while (true) {                                                                                \
+      name##Entry* slot = &hm->entries[idx];                                                      \
+      if (!slot->active) {                                                                        \
+        *slot = cur;                                                                              \
+        hm->size++;                                                                               \
+        return true;                                                                              \
+      }                                                                                           \
+      if (eq_fn(slot->key, cur.key)) {                                                            \
+        slot->val = cur.val;                                                                      \
+        return true;                                                                              \
+      }                                                                                           \
+      if (slot->psl < cur.psl) {                                                                  \
+        name##Entry tmp = *slot;                                                                  \
+        *slot = cur;                                                                              \
+        cur   = tmp;                                                                              \
+      }                                                                                           \
+      cur.psl++;                                                                                  \
+      idx = (idx + 1) % hm->capacity;                                                             \
+    }                                                                                             \
+  }                                                                                               \
+                                                                                                  \
+  static inline bool name##_get(name* hm, Tk key, Tv* outVal) {                                   \
+    if (!hm || hm->size == 0) return false;                                                       \
+                                                                                                  \
+    size_t idx = hash_fn(key) % hm->capacity;                                                     \
+    size_t psl = 0;                                                                               \
+    while (true) {                                                                                \
+      name##Entry* slot = &hm->entries[idx];                                                      \
+      if (!slot->active || slot->psl < psl) return false;                                         \
+      if (eq_fn(slot->key, key)) {                                                                \
+        if (outVal) *outVal = slot->val;                                                          \
+        return true;                                                                              \
+      }                                                                                           \
+      psl++;                                                                                      \
+      idx = (idx + 1) % hm->capacity;                                                             \
+    }                                                                                             \
+  }                                                                                               \
+                                                                                                  \
+  static inline bool name##_resize(name* hm, size_t newCap) {                                     \
+  if (!hm || !hm->a || newCap <= hm->size) return false;                                          \
+                                                                                                  \
+    name##Entry* newEntries = (name##Entry*)arena_alloc(                                          \
+      hm->a, sizeof(name##Entry) * newCap, true);                                                 \
+    if (!newEntries) return false;                                                                \
+                                                                                                  \
+    name##Entry* oldEntries = hm->entries;                                                        \
+    size_t       oldCap     = hm->capacity;                                                       \
+                                                                                                  \
+    hm->entries  = newEntries;                                                                    \
+    hm->capacity = newCap;                                                                        \
+    hm->size     = 0;                                                                             \
+                                                                                                  \
+    for (size_t i = 0; i < oldCap; i++) {                                                         \
+      if (oldEntries[i].active)                                                                   \
+        name##_insert(hm, oldEntries[i].key, oldEntries[i].val);                                  \
+    }                                                                                             \
+                                                                                                  \
+    return true;                                                                                  \
+  }                                                                                               \
+                                                                                                  \
+  static inline bool name##_delete(name* hm, Tk key) {                                            \
+    if (!hm || hm->size == 0) return false;                                                       \
+                                                                                                  \
+    size_t idx = hash_fn(key) % hm->capacity;                                                     \
+    size_t psl = 0;                                                                               \
+                                                                                                  \
+    while (true) {                                                                                \
+      name##Entry* slot = &hm->entries[idx];                                                      \
+      if (!slot->active || slot->psl < psl) return false;                                         \
+      if (eq_fn(slot->key, key)) break;                                                           \
+      psl++;                                                                                      \
+      idx = (idx + 1) % hm->capacity;                                                             \
+    }                                                                                             \
+                                                                                                  \
+    while (true) {                                                                                \
+      size_t       next     = (idx + 1) % hm->capacity;                                           \
+      name##Entry* nextSlot = &hm->entries[next];                                                 \
+                                                                                                  \
+      if (!nextSlot->active || nextSlot->psl == 0) {                                              \
+        hm->entries[idx].active = false;                                                          \
+        break;                                                                                    \
+      }                                                                                           \
+                                                                                                  \
+      hm->entries[idx]      = *nextSlot;                                                          \
+      hm->entries[idx].psl -= 1;                                                                  \
+      idx = next;                                                                                 \
+    }                                                                                             \
+                                                                                                  \
+    hm->size--;                                                                                   \
+    return true;                                                                                  \
+  }                                                                                               \
+                                                                                                  \
+  static inline bool name##_is_empty(name* hm) {                                                  \
+    if (!hm) return false;                                                                        \
+    return hm->size == 0;                                                                         \
+  }                                                                                               \
+                                                                                                  \
+  static inline void name##_clear(name* hm) {                                                     \
+    if (!hm) return;                                                                              \
+                                                                                                  \
+    memset(hm->entries, 0, sizeof(name##Entry) * hm->capacity);                                   \
+    hm->size = 0;                                                                                 \
+  }                                                                                               \
+
+
+#endif // AG_LIB_DS_MAP
