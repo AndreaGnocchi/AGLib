@@ -1,11 +1,15 @@
-#include <unistd.h>
-#include <sys/mman.h>
-#include <string.h>
-#include <stdbool.h>
 #include "../include/aglib_arena.h"
+#include <stddef.h>
+#include <string.h>
 
 #define DEFAULT_ALIGNMENT (sizeof(void*))
 #define ALIGN_POW2(n, alignment) (((n) + (alignment) - 1) & ~((alignment) - 1))
+
+#ifndef _WIN32
+
+#include <stdbool.h>
+#include <unistd.h>
+#include <sys/mman.h>
 
 #ifndef MAP_ANONYMOUS
   #define MAP_ANONYMOUS MAP_ANON
@@ -30,27 +34,13 @@ bool arena_init(sArena* a, size_t initSize) {
   return true;
 }
 
-void* arena_alloc_aligned(sArena* a, size_t size, bool zero, size_t alignment) {
-  if (!a || size == 0 || alignment == 0) return NULL;
-  if ((alignment & (alignment - 1)) != 0) return NULL;
+void arena_free(sArena* a) {
+  if (!a || !a->base) return;
 
-  size_t curPtr    = (size_t)(a->base + a->offset);
-  size_t alignPtr  = ALIGN_POW2(curPtr, alignment);
-  size_t padding   = alignPtr - curPtr;
-
-  if (a->offset + padding + size > a->size) return NULL;
-  
-  void* result = (void*)alignPtr;
-  a->offset += padding + size; 
-  
-  if (zero)
-    memset(result, 0, size); 
-  
-  return result;
-}
-
-void* arena_alloc(sArena* a, size_t size, bool zero) {
-  return arena_alloc_aligned(a, size, zero, DEFAULT_ALIGNMENT);
+  munmap(a->base, a->size);
+  a->base = NULL;
+  a->size = 0;
+  a->offset = 0;
 }
 
 void arena_reset(sArena* a) {
@@ -62,13 +52,29 @@ void arena_reset(sArena* a) {
 #endif
 }
 
-void arena_free(sArena* a) {
-  if (!a || !a->base) return;
+#endif // _WIN32
 
-  munmap(a->base, a->size);
-  a->base = NULL;
-  a->size = 0;
-  a->offset = 0;
+void* arena_alloc_aligned(sArena* a, size_t size, bool zero, size_t alignment) {
+  if (!a || size == 0 || alignment == 0) return NULL;
+  if ((alignment & (alignment - 1)) != 0) return NULL;
+
+  size_t curPtr    = (size_t)(a->base + a->offset);
+  size_t alignPtr  = ALIGN_POW2(curPtr, alignment);
+  size_t padding   = alignPtr - curPtr;
+
+  if (a->offset + padding + size > a->size) return NULL;
+  
+  void* result = (void*)alignPtr;
+  a->offset   += padding + size; 
+  
+  if (zero)
+    memset(result, 0, size); 
+  
+  return result;
+}
+
+void* arena_alloc(sArena* a, size_t size, bool zero) {
+  return arena_alloc_aligned(a, size, zero, DEFAULT_ALIGNMENT);
 }
 
 sTempArena arena_temp_start(sArena* a) {
@@ -85,3 +91,4 @@ void arena_temp_end(sTempArena temp) {
   if (temp.a) 
     temp.a->offset = temp.originalOffset;
 }
+

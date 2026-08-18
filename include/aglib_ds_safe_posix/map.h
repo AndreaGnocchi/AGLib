@@ -1,12 +1,9 @@
 #ifndef AG_LIB_DS_MAP
 #define AG_LIB_DS_MAP
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
 #include <string.h>
 #include <pthread.h>
-#include "../../include/aglib_arena.h"
+#include "../../include/aglib_allocator.h"
 
 // ——— Map ————————————————————————————————————————————————————————————————————————————————————————
 
@@ -22,26 +19,30 @@
     name##Entry*    entries;                                                                      \
     size_t          capacity;                                                                     \
     size_t          size;                                                                         \
-    sArena*         a;                                                                            \
+    sAllocator*     a;                                                                            \
     pthread_mutex_t lock;                                                                         \
   } name;                                                                                         \
                                                                                                   \
   static inline bool name##_resize(name* hm, size_t newCap);                                      \
   static inline bool _##name##_insert_nolock(name* hm, Tk key, Tv val);                           \
                                                                                                   \
-  static inline void name##_init(sArena* a, name* hm, size_t initCap) {                           \
-    if (!a || !hm || initCap == 0) return;                                                        \
+  static inline bool name##_init(sAllocator* a, name* hm, size_t initCap) {                       \
+    if (!a || !hm || initCap == 0 || a->type == SLAB) return false;                               \
+                                                                                                  \
+    hm->entries = (name##Entry*)ag_alloc(a, sizeof(name##Entry) * initCap, true);                 \
+    if (!hm->entries) return false;                                                               \
                                                                                                   \
     hm->capacity = initCap;                                                                       \
     hm->size     = 0;                                                                             \
     hm->a        = a;                                                                             \
-    hm->entries  = (name##Entry*)arena_alloc(a, sizeof(name##Entry) * initCap, true);             \
                                                                                                   \
     pthread_mutexattr_t attr;                                                                     \
     pthread_mutexattr_init(&attr);                                                                \
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);                                    \
     pthread_mutex_init(&hm->lock, &attr);                                                         \
     pthread_mutexattr_destroy(&attr);                                                             \
+                                                                                                  \
+    return true;                                                                                  \
   }                                                                                               \
                                                                                                   \
   static inline void name##_destroy(name* hm) {                                                   \
@@ -125,7 +126,7 @@
                                                                                                   \
     pthread_mutex_lock(&hm->lock);                                                                \
                                                                                                   \
-    name##Entry* newEntries = (name##Entry*)arena_alloc(                                          \
+    name##Entry* newEntries = (name##Entry*)ag_alloc(                                             \
       hm->a, sizeof(name##Entry) * newCap, true);                                                 \
     if (!newEntries) {                                                                            \
       pthread_mutex_unlock(&hm->lock);                                                            \
@@ -143,6 +144,8 @@
       if (oldEntries[i].active)                                                                   \
         _##name##_insert_nolock(hm, oldEntries[i].key, oldEntries[i].val);                        \
     }                                                                                             \
+                                                                                                  \
+    ag_free(hm->a, oldEntries);                                                                   \
                                                                                                   \
     pthread_mutex_unlock(&hm->lock);                                                              \
     return true;                                                                                  \
@@ -191,7 +194,7 @@
   }                                                                                               \
                                                                                                   \
   static inline bool name##_is_empty(name* hm) {                                                  \
-    if (!hm) return false;                                                                        \
+    if (!hm) return true;                                                                         \
                                                                                                   \
     pthread_mutex_lock(&hm->lock);                                                                \
     bool empty = hm->size == 0;                                                                   \
@@ -206,6 +209,20 @@
     memset(hm->entries, 0, sizeof(name##Entry) * hm->capacity);                                   \
     hm->size = 0;                                                                                 \
     pthread_mutex_unlock(&hm->lock);                                                              \
+  }                                                                                               \
+                                                                                                  \
+  static inline void name##_free(name* hm) {                                                      \
+    if (!hm) return;                                                                              \
+                                                                                                  \
+    pthread_mutex_lock(&hm->lock);                                                                \
+    ag_free(hm->a, hm->entries);                                                                  \
+    hm->entries  = NULL;                                                                          \
+    hm->capacity = 0;                                                                             \
+    hm->size     = 0;                                                                             \
+    hm->a        = NULL;                                                                          \
+    pthread_mutex_unlock(&hm->lock);                                                              \
+                                                                                                  \
+    pthread_mutex_destroy(&hm->lock);                                                             \
   }                                                                                               \
 
 #endif // AG_LIB_DS_MAP

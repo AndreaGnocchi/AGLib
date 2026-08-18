@@ -1,7 +1,15 @@
 #include "../include/aglib_algo.h"
 #include <string.h>
 #include <stdbool.h>
+
+#ifdef _WIN32
+#include <malloc.h>
+#ifndef alloca
+#define alloca _alloca
+#endif // allloca
+#else
 #include <alloca.h>
+#endif // _WIN32
 
 static inline void _memswap(void *a, void *b, size_t size, void *tmp) {
   memcpy(tmp, a,   size);
@@ -114,14 +122,16 @@ static void _pdqsort_recursive(char *base, size_t left, size_t right, size_t lim
 }
 
 void pdqsort(void *base, size_t nmemb, size_t size,
-             int (*cmp)(const void *, const void *), sArena* a) {
-  if (nmemb < 2) return;
+             int (*cmp)(const void *, const void *), sAllocator* a) {
+  if (nmemb < 2 || !a) return;
 
-  void *tmp = arena_alloc(a, size, false);
+  void *tmp = ag_alloc(a, size, false);
   if (!tmp) return;
 
   size_t limit = _log2_floor(nmemb) * 2;
   _pdqsort_recursive((char*)base, 0, nmemb - 1, limit, size, tmp, cmp);
+
+  ag_free(a, tmp);
 }
 
 // ——— Mergesort ——————————————————————————————————————————————————————————————————————————————————
@@ -162,11 +172,13 @@ static inline void _msort_recursive(void *base, void *temp, size_t left,
 }
 
 void mergesort(void *base, size_t nmemb, size_t size,
-               int (*cmp)(const void *, const void *), sArena* a) {
-  if (nmemb < 2) return;
+               int (*cmp)(const void *, const void *), sAllocator* a) {
+  if (nmemb < 2 || !a) return;
 
-  void *temp = arena_alloc(a, nmemb * size, false);
+  void *temp = ag_alloc(a, nmemb * size, false);
   if (!temp) return;
 
   _msort_recursive(base, temp, 0, nmemb - 1, size, cmp);
+
+  ag_free(a, temp);
 }

@@ -1,12 +1,9 @@
 #ifndef AG_LIB_DS_LINKED_LIST
 #define AG_LIB_DS_LINKED_LIST
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
 #include <string.h>
 #include <pthread.h>
-#include "../../include/aglib_arena.h"
+#include "../../include/aglib_allocator.h"
 
 // ——— Doubly Linked List —————————————————————————————————————————————————————————————————————————
 
@@ -21,12 +18,12 @@
     name##Node*     head;                                                                         \
     name##Node*     tail;                                                                         \
     size_t          size;                                                                         \
-    sArena*         a;                                                                            \
+    sAllocator*     a;                                                                            \
     pthread_mutex_t lock;                                                                         \
   } name;                                                                                         \
                                                                                                   \
-  static inline void name##_init(sArena* a, name* list) {                                         \
-    if (!a || !list) return;                                                                      \
+  static inline bool name##_init(sAllocator* a, name* list) {                                     \
+    if (!a || !list || a->type == SLAB) return false;                                             \
                                                                                                   \
     list->a    = a;                                                                               \
     list->head = NULL;                                                                            \
@@ -38,6 +35,8 @@
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);                                    \
     pthread_mutex_init(&list->lock, &attr);                                                       \
     pthread_mutexattr_destroy(&attr);                                                             \
+                                                                                                  \
+    return true;                                                                                  \
   }                                                                                               \
                                                                                                   \
   static inline void name##_destroy(name* list) {                                                 \
@@ -48,18 +47,28 @@
   static inline name##Node* _##name##_alloc_node(name* list, T val) {                             \
     if (!list || !list->a) return NULL;                                                           \
                                                                                                   \
-    T* valCpy = arena_alloc(list->a, sizeof(T), true);                                            \
+    T* valCpy = (T*)ag_alloc(list->a, sizeof(T), true);                                           \
     if (!valCpy) return NULL;                                                                     \
     *valCpy = val;                                                                                \
                                                                                                   \
-    name##Node* node = arena_alloc(list->a, sizeof(name##Node), true);                            \
-    if (!node) return NULL;                                                                       \
+    name##Node* node = (name##Node*)ag_alloc(list->a, sizeof(name##Node), true);                  \
+    if (!node) {                                                                                  \
+      ag_free(list->a, valCpy);                                                                   \
+      return NULL;                                                                                \
+    }                                                                                             \
                                                                                                   \
     node->val  = valCpy;                                                                          \
     node->next = NULL;                                                                            \
     node->prev = NULL;                                                                            \
                                                                                                   \
     return node;                                                                                  \
+  }                                                                                               \
+                                                                                                  \
+  static inline void _##name##_free_node(name* list, name##Node* node) {                          \
+    if (!list || !node) return;                                                                   \
+                                                                                                  \
+    ag_free(list->a, node->val);                                                                  \
+    ag_free(list->a, node);                                                                       \
   }                                                                                               \
                                                                                                   \
   static inline bool name##_push_head(name* list, T val) {                                        \
@@ -131,6 +140,7 @@
         list->tail = NULL;                                                                        \
     }                                                                                             \
                                                                                                   \
+    _##name##_free_node(list, oldHead);                                                           \
     list->size--;                                                                                 \
     pthread_mutex_unlock(&list->lock);                                                            \
     return true;                                                                                  \
@@ -157,6 +167,7 @@
         list->head = NULL;                                                                        \
     }                                                                                             \
                                                                                                   \
+    _##name##_free_node(list, oldTail);                                                           \
     list->size--;                                                                                 \
     pthread_mutex_unlock(&list->lock);                                                            \
     return true;                                                                                  \
@@ -244,13 +255,14 @@
       list->tail = node->prev;                                                                    \
     }                                                                                             \
                                                                                                   \
+    _##name##_free_node(list, node);                                                              \
     list->size--;                                                                                 \
     pthread_mutex_unlock(&list->lock);                                                            \
     return true;                                                                                  \
   }                                                                                               \
                                                                                                   \
   static inline bool name##_is_empty(name* list) {                                                \
-    if (!list) return false;                                                                      \
+    if (!list) return true;                                                                       \
                                                                                                   \
     pthread_mutex_lock(&list->lock);                                                              \
     bool empty = list->head == NULL;                                                              \
@@ -262,10 +274,25 @@
     if (!list) return;                                                                            \
                                                                                                   \
     pthread_mutex_lock(&list->lock);                                                              \
+    name##Node* cur = list->head;                                                                 \
+    while (cur) {                                                                                 \
+      name##Node* next = cur->next;                                                               \
+      _##name##_free_node(list, cur);                                                             \
+      cur = next;                                                                                 \
+    }                                                                                             \
+                                                                                                  \
     list->head = NULL;                                                                            \
     list->tail = NULL;                                                                            \
     list->size = 0;                                                                               \
     pthread_mutex_unlock(&list->lock);                                                            \
+  }                                                                                               \
+                                                                                                  \
+  static inline void name##_free(name* list) {                                                    \
+    if (!list) return;                                                                            \
+                                                                                                  \
+    name##_clear(list);                                                                           \
+    list->a = NULL;                                                                               \
+    pthread_mutex_destroy(&list->lock);                                                           \
   }                                                                                               \
 
 #endif // AG_LIB_DS_LINKED_LIST

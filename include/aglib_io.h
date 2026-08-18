@@ -2,13 +2,12 @@
 #define AG_LIB_IO
 
 #include <stdbool.h>
-#include <sys/types.h>
 #include <stddef.h> 
-#include "../include/aglib_arena.h"
+#include "../include/aglib_allocator.h"
 
-// ——— I/O Func ———————————————————————————————————————————————————————————————————————————————————
+// ——— Stdin Func ———————————————————————————————————————————————————————————————————————————————————
 
-bool get_str        (const char* prompt, char** str , size_t len , sArena*    a     );
+bool get_str        (const char* prompt, char** str , size_t len , sAllocator* a     );
 bool get_char       (const char* prompt, char*  val);
 bool get_opt        (const char* prompt, char*  val , size_t nOpt, const char opts[]);
 bool get_int        (const char* prompt, int*   val);
@@ -29,17 +28,11 @@ typedef struct {
   sPath  path;
 } sFileBuffer;
 
-bool  read_all_file   (int         fd      , sFileBuffer* out , sArena* a  );
-bool  write_all_file  (int         fd      , const void*  data, size_t  len);
-bool  append_to_file  (int         fd      , const void*  data, size_t  len);
-off_t get_file_size_fd(int         fd     );
-off_t get_file_size   (const char* path   );
 bool  path_exists     (const char* path   );
 bool  is_file         (const char* path   );
 bool  file_copy       (const char* src     , const char*  dst);
 bool  file_delete     (const char* path   );
-bool  find_path       (int         fd      , sPath*       out , sArena* a);
-bool  path_join       (const char* parts[] , size_t       n   , sPath*  out , sArena* a);
+bool  path_join       (const char*  parts[], size_t       n   , sPath*      out, sAllocator* a);
 
 // ——— Directory ——————————————————————————————————————————————————————————————
 
@@ -51,9 +44,9 @@ typedef struct {
 } sDirList;
 
 bool is_dir    (const char* path);
-bool dir_create(const char* path , bool      recursive);
-bool dir_delete(const char* path , bool      recursive);
-bool dir_list  (const char* path , sDirList* out       , sArena* a);
-bool dir_walk  (const char* root, bool recursive, WalkCallback cb, void* userdata, sArena* a);
+bool dir_create(const char* path, bool recursive);
+bool dir_delete(const char* path, bool recursive);
+bool dir_list  (const char* path, sDirList* out, sAllocator* a);
+bool dir_walk  (const char* root, bool recursive, WalkCallback cb, void* userdata, sAllocator* a);
 
 #endif // AG_LIB_IO

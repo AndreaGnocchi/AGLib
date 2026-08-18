@@ -2,7 +2,7 @@
 #define AG_LIB_DS_QUEUE
 
 #include <string.h>
-#include "../../include/aglib_arena.h"
+#include "../../include/aglib_allocator.h"
 #include "linked_list.h"
 
 // ——— Queue ——————————————————————————————————————————————————————————————————————————————————————
@@ -11,8 +11,8 @@
   LinkedList(T, Queue##name)                                                                      \
   typedef Queue##name name;                                                                       \
                                                                                                   \
-  static inline void name##_init(sArena* a, name* q) {                                            \
-    Queue##name##_init(a, q);                                                                     \
+  static inline bool name##_init(sAllocator* a, name* q) {                                        \
+    return Queue##name##_init(a, q);                                                              \
   }                                                                                               \
                                                                                                   \
   static inline void name##_destroy(name* q) {                                                    \
@@ -37,6 +37,10 @@
                                                                                                   \
   static inline void name##_clear(name* q) {                                                      \
     Queue##name##_clear(q);                                                                       \
+  }                                                                                               \
+                                                                                                  \
+  static inline void name##_free(name* q) {                                                       \
+    Queue##name##_free(q);                                                                        \
   }                                                                                               \
 
 #endif // AG_LIB_DS_QUEUE

@@ -2,7 +2,7 @@
 #define AG_LIB_DS_STACK
 
 #include <string.h>
-#include "../../include/aglib_arena.h"
+#include "../../include/aglib_allocator.h"
 #include "linked_list.h"
 
 // ——— Stack ——————————————————————————————————————————————————————————————————————————————————————
@@ -11,8 +11,8 @@
   LinkedList(T, Stack##name)                                                                      \
   typedef Stack##name name;                                                                       \
                                                                                                   \
-  static inline void name##_init(sArena* a, name* s) {                                            \
-    Stack##name##_init(a, s);                                                                     \
+  static inline bool name##_init(sAllocator* a, name* s) {                                        \
+    return Stack##name##_init(a, s);                                                              \
   }                                                                                               \
                                                                                                   \
   static inline bool name##_push(name* s, T val) {                                                \
@@ -33,6 +33,10 @@
                                                                                                   \
   static inline void name##_clear(name* s) {                                                      \
     Stack##name##_clear(s);                                                                       \
+  }                                                                                               \
+                                                                                                  \
+  static inline void name##_free(name* s) {                                                       \
+    Stack##name##_free(s);                                                                        \
   }                                                                                               \
 
 

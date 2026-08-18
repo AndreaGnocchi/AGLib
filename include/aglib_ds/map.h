@@ -2,7 +2,7 @@
 #define AG_LIB_DS_MAP
 
 #include <string.h>
-#include "../../include/aglib_arena.h"
+#include "../../include/aglib_allocator.h"
 
 // ——— Map ————————————————————————————————————————————————————————————————————————————————————————
 
@@ -18,18 +18,22 @@
     name##Entry* entries;                                                                         \
     size_t       capacity;                                                                        \
     size_t       size;                                                                            \
-    sArena*      a;                                                                               \
+    sAllocator*  a;                                                                               \
   } name;                                                                                         \
                                                                                                   \
   static inline bool name##_resize(name* hm, size_t newCap);                                      \
                                                                                                   \
-  static inline void name##_init(sArena* a, name* hm, size_t initCap) {                           \
-    if (!a || !hm || initCap == 0) return;                                                        \
+  static inline bool name##_init(sAllocator* a, name* hm, size_t initCap) {                       \
+    if (!a || !hm || initCap == 0 || a->type == SLAB) return false;                               \
+                                                                                                  \
+    hm->entries = (name##Entry*)ag_alloc(a, sizeof(name##Entry) * initCap, true);                 \
+    if (!hm->entries) return false;                                                               \
                                                                                                   \
     hm->capacity = initCap;                                                                       \
     hm->size     = 0;                                                                             \
     hm->a        = a;                                                                             \
-    hm->entries  = (name##Entry*)arena_alloc(a, sizeof(name##Entry) * initCap, true);             \
+                                                                                                  \
+    return true;                                                                                  \
   }                                                                                               \
                                                                                                   \
   static inline bool name##_insert(name* hm, Tk key, Tv val) {                                    \
@@ -85,9 +89,9 @@
   }                                                                                               \
                                                                                                   \
   static inline bool name##_resize(name* hm, size_t newCap) {                                     \
-  if (!hm || !hm->a || newCap <= hm->size) return false;                                          \
+    if (!hm || !hm->a || newCap <= hm->size) return false;                                         \
                                                                                                   \
-    name##Entry* newEntries = (name##Entry*)arena_alloc(                                          \
+    name##Entry* newEntries = (name##Entry*)ag_alloc(                                             \
       hm->a, sizeof(name##Entry) * newCap, true);                                                 \
     if (!newEntries) return false;                                                                \
                                                                                                   \
@@ -102,6 +106,8 @@
       if (oldEntries[i].active)                                                                   \
         name##_insert(hm, oldEntries[i].key, oldEntries[i].val);                                  \
     }                                                                                             \
+                                                                                                  \
+    ag_free(hm->a, oldEntries);                                                                   \
                                                                                                   \
     return true;                                                                                  \
   }                                                                                               \
@@ -139,15 +145,26 @@
   }                                                                                               \
                                                                                                   \
   static inline bool name##_is_empty(name* hm) {                                                  \
-    if (!hm) return false;                                                                        \
+    if (!hm) return true;                                                                         \
     return hm->size == 0;                                                                         \
   }                                                                                               \
                                                                                                   \
   static inline void name##_clear(name* hm) {                                                     \
-    if (!hm) return;                                                                              \
+    if (!hm || !hm->entries) return;                                                              \
                                                                                                   \
     memset(hm->entries, 0, sizeof(name##Entry) * hm->capacity);                                   \
     hm->size = 0;                                                                                 \
+  }                                                                                               \
+                                                                                                  \
+  static inline void name##_free(name* hm) {                                                      \
+    if (!hm) return;                                                                              \
+                                                                                                  \
+    ag_free(hm->a, hm->entries);                                                                  \
+                                                                                                  \
+    hm->entries  = NULL;                                                                          \
+    hm->capacity = 0;                                                                             \
+    hm->size     = 0;                                                                             \
+    hm->a        = NULL;                                                                          \
   }                                                                                               \
 
 

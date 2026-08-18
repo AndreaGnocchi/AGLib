@@ -2,7 +2,7 @@
 #define AG_LIB_DS_TREE_MAP
 
 #include <string.h>
-#include "../../include/aglib_arena.h"
+#include "../../include/aglib_allocator.h"
 
 // ——— Red-Black Tree —————————————————————————————————————————————————————————————————————————————
 typedef enum {black, red} eColor;
@@ -22,18 +22,22 @@ typedef enum {black, red} eColor;
     name##Node* root;                                                                             \
     name##Node* nil;                                                                              \
     size_t      size;                                                                             \
-    sArena*     a;                                                                                \
+    sAllocator* a;                                                                                \
   } name;                                                                                         \
                                                                                                   \
-  static inline void name##_init(sArena* a, name* t) {                                            \
-    if (!t || !a) return;                                                                         \
+  static inline bool name##_init(sAllocator* a, name* t) {                                        \
+    if (!t || !a) return false;                                                                   \
                                                                                                   \
-    t->nil        = (name##Node*)arena_alloc(a, sizeof(name##Node), true);                        \
+    t->nil = (name##Node*)ag_alloc(a, sizeof(name##Node), true);                                  \
+    if (!t->nil) return false;                                                                    \
+                                                                                                  \
     t->nil->color = black;                                                                        \
     t->nil->left  = t->nil->right = t->nil->parent = t->nil;                                      \
     t->root       = t->nil;                                                                       \
     t->size       = 0;                                                                            \
     t->a          = a;                                                                            \
+                                                                                                  \
+    return true;                                                                                  \
   }                                                                                               \
                                                                                                   \
   static inline void _##name##_left_rotate(name* t, name##Node* x) {                              \
@@ -228,7 +232,7 @@ typedef enum {black, red} eColor;
       x = (c < 0) ? x->left : x->right;                                                           \
     }                                                                                             \
                                                                                                   \
-    name##Node* z = (name##Node*)arena_alloc(t->a, sizeof(name##Node), true);                     \
+    name##Node* z = (name##Node*)ag_alloc(t->a, sizeof(name##Node), true);                        \
     if (!z) return false;                                                                         \
                                                                                                   \
     z->key    = key;                                                                              \
@@ -310,6 +314,7 @@ typedef enum {black, red} eColor;
       _##name##_delete_fixup(t, x);                                                               \
     }                                                                                             \
                                                                                                   \
+    ag_free(t->a, z);                                                                             \
     t->size--;                                                                                    \
     return true;                                                                                  \
   }                                                                                               \
@@ -335,25 +340,34 @@ typedef enum {black, red} eColor;
   }                                                                                               \
                                                                                                   \
   static inline bool name##_is_empty(name* t) {                                                   \
-    if (!t) return false;                                                                         \
-                                                                                                  \
+    if (!t) return true;                                                                          \
     return t->root == t->nil;                                                                     \
   }                                                                                               \
                                                                                                   \
-  static inline void _##name##_clear_node(name* t, name##Node* node) {                            \
-    if (!t || !node) return;                                                                      \
+  static inline void _##name##_free_node(name* t, name##Node* node) {                             \
+    if (!t || !node || node == t->nil) return;                                                    \
                                                                                                   \
-    if (node == t->nil) return;                                                                   \
-    _##name##_clear_node(t, node->left);                                                          \
-    _##name##_clear_node(t, node->right);                                                         \
+    _##name##_free_node(t, node->left);                                                           \
+    _##name##_free_node(t, node->right);                                                          \
+    ag_free(t->a, node);                                                                          \
   }                                                                                               \
                                                                                                   \
   static inline void name##_clear(name* t) {                                                      \
     if (!t) return;                                                                               \
                                                                                                   \
-    _##name##_clear_node(t, t->root);                                                             \
+    _##name##_free_node(t, t->root);                                                              \
     t->root = t->nil;                                                                             \
     t->size = 0;                                                                                  \
+  }                                                                                               \
+                                                                                                  \
+  static inline void name##_free(name* t) {                                                       \
+    if (!t) return;                                                                               \
+                                                                                                  \
+    name##_clear(t);                                                                              \
+    ag_free(t->a, t->nil);                                                                        \
+    t->nil = NULL;                                                                                \
+    t->root = NULL;                                                                               \
+    t->a = NULL;                                                                                  \
   }                                                                                               \
 
 
