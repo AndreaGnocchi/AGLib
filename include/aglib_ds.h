@@ -14,18 +14,36 @@
 #include "aglib_ds/tree_map.h"
 #include "aglib_ds/tree_set.h"
 
+
 #else
 
-#include "aglib_ds_safe/array.h"
-#include "aglib_ds_safe/string.h"
-#include "aglib_ds_safe/linked_list.h"
-#include "aglib_ds_safe/stack.h"
-#include "aglib_ds_safe/queue.h"
-#include "aglib_ds_safe/heap.h"
-#include "aglib_ds_safe/map.h"
-#include "aglib_ds_safe/set.h"
-#include "aglib_ds_safe/tree_map.h"
-#include "aglib_ds_safe/tree_set.h"
+#ifndef _WIN32
+
+#include "aglib_ds_safe_posix/array.h"
+#include "aglib_ds_safe_posix/string.h"
+#include "aglib_ds_safe_posix/linked_list.h"
+#include "aglib_ds_safe_posix/stack.h"
+#include "aglib_ds_safe_posix/queue.h"
+#include "aglib_ds_safe_posix/heap.h"
+#include "aglib_ds_safe_posix/map.h"
+#include "aglib_ds_safe_posix/set.h"
+#include "aglib_ds_safe_posix/tree_map.h"
+#include "aglib_ds_safe_posix/tree_set.h"
+
+#else
+
+#include "aglib_ds_safe_win/array.h"
+#include "aglib_ds_safe_win/string.h"
+#include "aglib_ds_safe_win/linked_list.h"
+#include "aglib_ds_safe_win/stack.h"
+#include "aglib_ds_safe_win/queue.h"
+#include "aglib_ds_safe_win/heap.h"
+#include "aglib_ds_safe_win/map.h"
+#include "aglib_ds_safe_win/set.h"
+#include "aglib_ds_safe_win/tree_map.h"
+#include "aglib_ds_safe_win/tree_set.h"
+
+#endif // _WIN32
 
 #endif // THREAD_SAFE_AGLIB_DS
 

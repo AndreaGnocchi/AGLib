@@ -2,17 +2,17 @@
 #define AG_LIB_DS_HEAP
 
 #include <string.h>
-#include "../../include/aglib_arena.h"
+#include "../../include/aglib_allocator.h"
 #include "array.h"
 
 // ——— Heap ———————————————————————————————————————————————————————————————————————————————————————
- 
+
 #define Heap(T, name, cmp)                                                                        \
   DynamicArray(T, Heap##name)                                                                     \
   typedef Heap##name name;                                                                        \
                                                                                                   \
-  static inline void name##_init(sArena* a, name* h, size_t initCap) {                            \
-    Heap##name##_init(a, h, initCap);                                                             \
+  static inline bool name##_init(sAllocator* a, name* h, size_t initCap) {                        \
+    return Heap##name##_init(a, h, initCap);                                                      \
   }                                                                                               \
                                                                                                   \
   static inline void name##_destroy(name* h) {                                                    \
@@ -93,6 +93,10 @@
                                                                                                   \
   static inline void name##_clear(name* h) {                                                      \
     Heap##name##_clear(h);                                                                        \
-  }  
+  }                                                                                               \
+                                                                                                  \
+  static inline void name##_free(name* h) {                                                       \
+    Heap##name##_free(h);                                                                         \
+  }                                                                                               \
 
 #endif // AG_LIB_DS_HEAP

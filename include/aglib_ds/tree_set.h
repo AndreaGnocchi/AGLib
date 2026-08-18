@@ -2,7 +2,7 @@
 #define AG_LIB_DS_TREE_SET
 
 #include <string.h>
-#include "../../include/aglib_arena.h"
+#include "../../include/aglib_allocator.h"
 #include "tree_map.h"
 
 // ——— Red-Black Tree Set —————————————————————————————————————————————————————————————————————————
@@ -11,8 +11,8 @@
   TreeMap(T, bool, name##_tmap_, cmp_fn)                                                          \
   typedef name##_tmap_ name;                                                                      \
                                                                                                   \
-  static inline void name##_init(sArena* a, name* s) {                                            \
-    name##_tmap_##_init(a, s);                                                                    \
+  static inline bool name##_init(sAllocator* a, name* s) {                                        \
+    return name##_tmap_##_init(a, s);                                                             \
   }                                                                                               \
                                                                                                   \
   static inline bool name##_insert(name* s, T key) {                                              \
@@ -44,6 +44,10 @@
                                                                                                   \
   static inline void name##_clear(name* s) {                                                      \
     name##_tmap_##_clear(s);                                                                      \
+  }                                                                                               \
+                                                                                                  \
+  static inline void name##_free(name* s) {                                                       \
+    name##_tmap_##_free(s);                                                                       \
   }                                                                                               \
 
 #endif // AG_LIB_DS_TREE_SET

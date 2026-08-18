@@ -2,7 +2,8 @@
 #define AG_LIB_DS_ARRAY
 
 #include <string.h>
-#include "../../include/aglib_arena.h"
+#include <stdint.h>
+#include "../../include/aglib_allocator.h"
 
 // ——— Dynamic array ——————————————————————————————————————————————————————————————————————————————
 
@@ -11,27 +12,34 @@
     T*      items;                                                                                \
     size_t  capacity;                                                                             \
     size_t  size;                                                                                 \
-    sArena* a;                                                                                    \
+    sAllocator* a;                                                                                \
   } name;                                                                                         \
                                                                                                   \
-  static inline void name##_init(sArena* a, name* arr, size_t initCap) {                          \
-    if (!a || !arr || initCap == 0) return;                                                       \
+                                                                                                  \
+  static inline bool name##_init(sAllocator* a, name* arr, size_t initCap) {                      \
+    if (!a || !arr || initCap == 0 || a->type == SLAB) return false;                              \
+                                                                                                  \
+    arr->items = (T*)ag_alloc(a, sizeof(T) * initCap, true);                                      \
+    if (!arr->items) return false;                                                                \
                                                                                                   \
     arr->a        = a;                                                                            \
     arr->capacity = initCap;                                                                      \
     arr->size     = 0;                                                                            \
-    arr->items    = (T*)arena_alloc(a, sizeof(T) * initCap, true);                                \
+                                                                                                  \
+    return true;                                                                                  \
   }                                                                                               \
                                                                                                   \
   static inline bool name##_push(name* arr, T items) {                                            \
-    if (!arr->a) return false;                                                                    \
+    if (!arr || !arr->a) return false;                                                            \
                                                                                                   \
     if (arr->size >= arr->capacity) {                                                              \
+      if (arr->capacity > SIZE_MAX / 2) return false;                                             \
+                                                                                                  \
       size_t newCap   = arr->capacity * 2;                                                        \
-      T*     newItems = (T*)arena_alloc(arr->a, sizeof(T) * newCap, true);                        \
+      T* newItems = (T*)ag_realloc(arr->a, arr->items, sizeof(T) * arr->capacity,                 \
+                                   sizeof(T) * newCap, true);                                     \
       if (!newItems) return false;                                                                \
                                                                                                   \
-      memcpy(newItems, arr->items, sizeof(T) * arr->size);                                        \
       arr->items    = newItems;                                                                   \
       arr->capacity = newCap;                                                                     \
     }                                                                                             \
@@ -41,17 +49,25 @@
   }                                                                                               \
                                                                                                   \
   static inline bool name##_is_empty(name* arr) {                                                 \
-    if (!arr) return false;                                                                       \
+    if (!arr) return true;                                                                        \
     return arr->size == 0;                                                                        \
   }                                                                                               \
                                                                                                   \
   static inline void name##_clear(name* arr) {                                                    \
-    if (!arr) return;                                                                             \
+    if (!arr || !arr->items) return;                                                              \
                                                                                                   \
-    memset(arr->items, 0, sizeof(T) * arr->capacity);                                             \
     arr->size = 0;                                                                                \
   }                                                                                               \
-
-
+                                                                                                  \
+  static inline void name##_free(name* arr) {                                                     \
+    if (!arr) return;                                                                             \
+                                                                                                  \
+    ag_free(arr->a, arr->items);                                                                  \
+                                                                                                  \
+    arr->items    = NULL;                                                                         \
+    arr->capacity = 0;                                                                            \
+    arr->size     = 0;                                                                            \
+    arr->a        = NULL;                                                                         \
+  }                                                                                               \
 
 #endif // AG_LIB_DS_ARRAY

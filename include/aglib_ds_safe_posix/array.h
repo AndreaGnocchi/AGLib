@@ -1,12 +1,10 @@
 #ifndef AG_LIB_DS_ARRAY
 #define AG_LIB_DS_ARRAY
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
 #include <string.h>
+#include <stdint.h>
 #include <pthread.h>
-#include "../../include/aglib_arena.h"
+#include "../../include/aglib_allocator.h"
 
 // ——— Dynamic array ——————————————————————————————————————————————————————————————————————————————
 
@@ -15,23 +13,27 @@
     T*              items;                                                                        \
     size_t          capacity;                                                                     \
     size_t          size;                                                                         \
-    sArena*         a;                                                                            \
+    sAllocator*     a;                                                                            \
     pthread_mutex_t lock;                                                                         \
   } name;                                                                                         \
                                                                                                   \
-  static inline void name##_init(sArena* a, name* arr, size_t initCap) {                          \
-    if (!a || !arr || initCap == 0) return;                                                       \
+  static inline bool name##_init(sAllocator* a, name* arr, size_t initCap) {                      \
+    if (!a || !arr || initCap == 0 || a->type == SLAB) return false;                              \
+                                                                                                  \
+    arr->items = (T*)ag_alloc(a, sizeof(T) * initCap, true);                                      \
+    if (!arr->items) return false;                                                                \
                                                                                                   \
     arr->a        = a;                                                                            \
     arr->capacity = initCap;                                                                      \
     arr->size     = 0;                                                                            \
-    arr->items    = (T*)arena_alloc(a, sizeof(T) * initCap, true);                                \
                                                                                                   \
     pthread_mutexattr_t attr;                                                                     \
     pthread_mutexattr_init(&attr);                                                                \
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);                                    \
     pthread_mutex_init(&arr->lock, &attr);                                                        \
     pthread_mutexattr_destroy(&attr);                                                             \
+                                                                                                  \
+    return true;                                                                                  \
   }                                                                                               \
                                                                                                   \
   static inline void name##_destroy(name* arr) {                                                  \
@@ -42,17 +44,22 @@
   static inline bool name##_push(name* arr, T items) {                                            \
     if (!arr || !arr->a) return false;                                                            \
                                                                                                   \
-    pthread_mutex_lock(&arr->lock);                                                               \
+     pthread_mutex_lock(&arr->lock);                                                              \
                                                                                                   \
     if (arr->size >= arr->capacity) {                                                              \
+      if (arr->capacity > SIZE_MAX / 2) {                                                         \
+        pthread_mutex_unlock(&arr->lock);                                                         \
+        return false;                                                                             \
+      }                                                                                           \
+                                                                                                  \
       size_t newCap   = arr->capacity * 2;                                                        \
-      T*     newItems = (T*)arena_alloc(arr->a, sizeof(T) * newCap, true);                        \
+      T* newItems = (T*)ag_realloc(arr->a, arr->items, sizeof(T) * arr->capacity,                 \
+                                   sizeof(T) * newCap, true);                                     \
       if (!newItems) {                                                                            \
         pthread_mutex_unlock(&arr->lock);                                                         \
         return false;                                                                             \
       }                                                                                           \
                                                                                                   \
-      memcpy(newItems, arr->items, sizeof(T) * arr->size);                                        \
       arr->items    = newItems;                                                                   \
       arr->capacity = newCap;                                                                     \
     }                                                                                             \
@@ -63,7 +70,7 @@
   }                                                                                               \
                                                                                                   \
   static inline bool name##_is_empty(name* arr) {                                                 \
-    if (!arr) return false;                                                                       \
+    if (!arr) return true;                                                                        \
                                                                                                   \
     pthread_mutex_lock(&arr->lock);                                                               \
     bool empty = arr->size == 0;                                                                  \
@@ -78,6 +85,20 @@
     memset(arr->items, 0, sizeof(T) * arr->capacity);                                             \
     arr->size = 0;                                                                                \
     pthread_mutex_unlock(&arr->lock);                                                             \
+  }                                                                                               \
+                                                                                                  \
+  static inline void name##_free(name* arr) {                                                     \
+    if (!arr) return;                                                                             \
+                                                                                                  \
+    pthread_mutex_lock(&arr->lock);                                                               \
+    ag_free(arr->a, arr->items);                                                                  \
+    arr->items    = NULL;                                                                         \
+    arr->capacity = 0;                                                                            \
+    arr->size     = 0;                                                                            \
+    arr->a        = NULL;                                                                         \
+    pthread_mutex_unlock(&arr->lock);                                                             \
+                                                                                                  \
+    pthread_mutex_destroy(&arr->lock);                                                            \
   }                                                                                               \
 
 #endif // AG_LIB_DS_ARRAY

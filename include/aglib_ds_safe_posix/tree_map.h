@@ -1,12 +1,9 @@
 #ifndef AG_LIB_DS_TREE_MAP
 #define AG_LIB_DS_TREE_MAP
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
 #include <string.h>
 #include <pthread.h>
-#include "../../include/aglib_arena.h"
+#include "../../include/aglib_allocator.h"
 
 // ——— Red-Black Tree —————————————————————————————————————————————————————————————————————————————
 typedef enum {black, red} eColor;
@@ -26,14 +23,16 @@ typedef enum {black, red} eColor;
     name##Node*     root;                                                                         \
     name##Node*     nil;                                                                          \
     size_t          size;                                                                         \
-    sArena*         a;                                                                            \
+    sAllocator*     a;                                                                            \
     pthread_mutex_t lock;                                                                         \
   } name;                                                                                         \
                                                                                                   \
-  static inline void name##_init(sArena* a, name* t) {                                            \
-    if (!t || !a) return;                                                                         \
+  static inline bool name##_init(sAllocator* a, name* t) {                                        \
+    if (!t || !a) return false;                                                                   \
                                                                                                   \
-    t->nil        = (name##Node*)arena_alloc(a, sizeof(name##Node), true);                        \
+    t->nil = (name##Node*)ag_alloc(a, sizeof(name##Node), true);                                  \
+    if (!t->nil) return false;                                                                    \
+                                                                                                  \
     t->nil->color = black;                                                                        \
     t->nil->left  = t->nil->right = t->nil->parent = t->nil;                                      \
     t->root       = t->nil;                                                                       \
@@ -45,6 +44,8 @@ typedef enum {black, red} eColor;
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);                                    \
     pthread_mutex_init(&t->lock, &attr);                                                          \
     pthread_mutexattr_destroy(&attr);                                                             \
+                                                                                                  \
+    return true;                                                                                  \
   }                                                                                               \
                                                                                                   \
   static inline void name##_destroy(name* t) {                                                    \
@@ -249,7 +250,7 @@ typedef enum {black, red} eColor;
       x = (c < 0) ? x->left : x->right;                                                           \
     }                                                                                             \
                                                                                                   \
-    name##Node* z = (name##Node*)arena_alloc(t->a, sizeof(name##Node), true);                     \
+    name##Node* z = (name##Node*)ag_alloc(t->a, sizeof(name##Node), true);                        \
     if (!z) {                                                                                     \
       pthread_mutex_unlock(&t->lock);                                                             \
       return false;                                                                               \
@@ -343,6 +344,7 @@ typedef enum {black, red} eColor;
       _##name##_delete_fixup(t, x);                                                               \
     }                                                                                             \
                                                                                                   \
+    ag_free(t->a, z);                                                                             \
     t->size--;                                                                                    \
     pthread_mutex_unlock(&t->lock);                                                               \
     return true;                                                                                  \
@@ -379,7 +381,7 @@ typedef enum {black, red} eColor;
   }                                                                                               \
                                                                                                   \
   static inline bool name##_is_empty(name* t) {                                                   \
-    if (!t) return false;                                                                         \
+    if (!t) return true;                                                                          \
                                                                                                   \
     pthread_mutex_lock(&t->lock);                                                                 \
     bool empty = t->root == t->nil;                                                               \
@@ -387,22 +389,37 @@ typedef enum {black, red} eColor;
     return empty;                                                                                 \
   }                                                                                               \
                                                                                                   \
-  static inline void _##name##_clear_node(name* t, name##Node* node) {                            \
-    if (!t || !node) return;                                                                      \
+  static inline void _##name##_free_node(name* t, name##Node* node) {                             \
+    if (!t || !node || node == t->nil) return;                                                    \
                                                                                                   \
-    if (node == t->nil) return;                                                                   \
-    _##name##_clear_node(t, node->left);                                                          \
-    _##name##_clear_node(t, node->right);                                                         \
+    _##name##_free_node(t, node->left);                                                           \
+    _##name##_free_node(t, node->right);                                                          \
+    ag_free(t->a, node);                                                                          \
   }                                                                                               \
                                                                                                   \
   static inline void name##_clear(name* t) {                                                      \
     if (!t) return;                                                                               \
                                                                                                   \
     pthread_mutex_lock(&t->lock);                                                                 \
-    _##name##_clear_node(t, t->root);                                                             \
+    _##name##_free_node(t, t->root);                                                              \
     t->root = t->nil;                                                                             \
     t->size = 0;                                                                                  \
     pthread_mutex_unlock(&t->lock);                                                               \
+  }                                                                                               \
+                                                                                                  \
+  static inline void name##_free(name* t) {                                                       \
+    if (!t) return;                                                                               \
+                                                                                                  \
+    name##_clear(t);                                                                              \
+                                                                                                  \
+    pthread_mutex_lock(&t->lock);                                                                 \
+    ag_free(t->a, t->nil);                                                                        \
+    t->nil  = NULL;                                                                               \
+    t->root = NULL;                                                                               \
+    t->a    = NULL;                                                                               \
+    pthread_mutex_unlock(&t->lock);                                                               \
+                                                                                                  \
+    pthread_mutex_destroy(&t->lock);                                                              \
   }                                                                                               \
 
 #endif // AG_LIB_DS_TREE_MAP

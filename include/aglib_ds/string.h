@@ -3,7 +3,7 @@
 
 #include <string.h>
 #include <stdarg.h>
-#include "../../include/aglib_arena.h"
+#include "../../include/aglib_allocator.h"
 #include "array.h"
 
 // ——— String —————————————————————————————————————————————————————————————————————————————————————
@@ -17,13 +17,16 @@ typedef struct {
   DynamicArray(char, str##name)                                                                   \
   typedef str##name name;                                                                         \
                                                                                                   \
-  static inline void name##_init(sArena* a, name* str, const char* init) {                        \
-    if (!str || !a || !init) return;                                                              \
+  static inline bool name##_init(sAllocator* a, name* str, const char* init) {                    \
+    if (!str || !a || !init) return false;                                                        \
     size_t len = strlen(init);                                                                    \
-    str##name##_init(a, str, len + 1);                                                            \
+    if (!str##name##_init(a, str, len + 1)) return false;                                         \
+                                                                                                  \
     str->size = len;                                                                              \
     memcpy(str->items, init, len);                                                                \
     str->items[len] = '\0';                                                                       \
+                                                                                                  \
+    return true;                                                                                  \
   }                                                                                               \
                                                                                                   \
   static inline bool name##_append(name* str, const char* toAppend) {                             \
@@ -36,10 +39,9 @@ typedef struct {
       size_t newCap = str->capacity ? str->capacity * 2 : needed;                                 \
       while (newCap < needed) newCap *= 2;                                                        \
                                                                                                   \
-      char* newItems = (char*)arena_alloc(str->a, newCap, true);                                  \
+      char* newItems = (char*)ag_realloc(str->a, str->items, str->capacity, newCap, true);        \
       if (!newItems) return false;                                                                \
                                                                                                   \
-      memcpy(newItems, str->items, str->size);                                                    \
       str->items    = newItems;                                                                   \
       str->capacity = newCap;                                                                     \
     }                                                                                             \
@@ -59,7 +61,7 @@ typedef struct {
     return (sStringView){ .ptr = str->items + start, .len = len };                                \
   }                                                                                               \
                                                                                                   \
-  static inline bool name##_appendf(sArena* a, name* str, const char* fmt, ...) {                 \
+  static inline bool name##_appendf(sAllocator* a, name* str, const char* fmt, ...) {             \
     if (!a || !str || !fmt) return false;                                                         \
                                                                                                   \
     va_list args;                                                                                 \
@@ -74,12 +76,8 @@ typedef struct {
       size_t newCap = str->capacity ? str->capacity * 2 : needed;                                 \
       while (newCap < needed) newCap *= 2;                                                        \
                                                                                                   \
-      char* newItems = (char*)arena_alloc(a, newCap, true);                                       \
+      char* newItems = (char*)ag_realloc(a, str->items, str->capacity, newCap, true);             \
       if (!newItems) return false;                                                                \
-                                                                                                  \
-      if (str->items && str->size > 0) {                                                          \
-        memcpy(newItems, str->items, str->size);                                                  \
-      }                                                                                           \
                                                                                                   \
       str->items    = newItems;                                                                   \
       str->capacity = newCap;                                                                     \
@@ -100,6 +98,10 @@ typedef struct {
                                                                                                   \
   static inline void name##_clear(name* str) {                                                    \
     str##name##_clear(str);                                                                       \
+  }                                                                                               \
+                                                                                                  \
+  static inline void name##_free(name* str) {                                                     \
+    str##name##_free(str);                                                                        \
   }                                                                                               \
 
 
