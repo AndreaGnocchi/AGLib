@@ -65,7 +65,7 @@ static void _heapsort_impl(char *b, size_t nmemb, size_t size,
   }
 }
 
-void heapsort(void *base, size_t nmemb, size_t size,
+void ag_heapsort(void *base, size_t nmemb, size_t size,
               int (*cmp)(const void *, const void *)) {
   if (nmemb < 2) return;
 
@@ -121,7 +121,7 @@ static void _pdqsort_recursive(char *base, size_t left, size_t right, size_t lim
   _insertion_sort(base, left, right, size, tmp, cmp);
 }
 
-void pdqsort(void *base, size_t nmemb, size_t size,
+void ag_pdqsort(void *base, size_t nmemb, size_t size,
              int (*cmp)(const void *, const void *), sAllocator* a) {
   if (nmemb < 2 || !a) return;
 
@@ -171,7 +171,7 @@ static inline void _msort_recursive(void *base, void *temp, size_t left,
   }
 }
 
-void mergesort(void *base, size_t nmemb, size_t size,
+void ag_mergesort(void *base, size_t nmemb, size_t size,
                int (*cmp)(const void *, const void *), sAllocator* a) {
   if (nmemb < 2 || !a) return;
 

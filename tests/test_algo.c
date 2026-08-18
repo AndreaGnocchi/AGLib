@@ -36,13 +36,13 @@ static void run_all_three(int* src, size_t n, sAllocator* alloc) {
     memcpy(a3, src, n * sizeof(int));
   }
 
-  pdqsort(a1, n, sizeof(int), qcmp_int, alloc);
+  ag_pdqsort(a1, n, sizeof(int), qcmp_int, alloc);
   AG_CHECK(is_sorted(a1, n));
 
-  mergesort(a2, n, sizeof(int), qcmp_int, alloc);
+  ag_mergesort(a2, n, sizeof(int), qcmp_int, alloc);
   AG_CHECK(is_sorted(a2, n));
 
-  heapsort(a3, n, sizeof(int), qcmp_int);
+  ag_heapsort(a3, n, sizeof(int), qcmp_int);
   AG_CHECK(is_sorted(a3, n));
 
   // Cross-check: all three sorts should agree on the multiset of results.
@@ -82,24 +82,24 @@ static void test_algo_edge_sizes(void) {
   sAllocator alloc = use_arena(&a);
 
   int empty[1];
-  pdqsort(empty, 0, sizeof(int), qcmp_int, &alloc);
-  mergesort(empty, 0, sizeof(int), qcmp_int, &alloc);
-  heapsort(empty, 0, sizeof(int), qcmp_int);
+  ag_pdqsort(empty, 0, sizeof(int), qcmp_int, &alloc);
+  ag_mergesort(empty, 0, sizeof(int), qcmp_int, &alloc);
+  ag_heapsort(empty, 0, sizeof(int), qcmp_int);
 
   int single[1] = { 42 };
-  pdqsort(single, 1, sizeof(int), qcmp_int, &alloc);
+  ag_pdqsort(single, 1, sizeof(int), qcmp_int, &alloc);
   AG_CHECK(single[0] == 42);
 
   int single2[1] = { 42 };
-  mergesort(single2, 1, sizeof(int), qcmp_int, &alloc);
+  ag_mergesort(single2, 1, sizeof(int), qcmp_int, &alloc);
   AG_CHECK(single2[0] == 42);
 
   int single3[1] = { 42 };
-  heapsort(single3, 1, sizeof(int), qcmp_int);
+  ag_heapsort(single3, 1, sizeof(int), qcmp_int);
   AG_CHECK(single3[0] == 42);
 
   int pair[2] = { 2, 1 };
-  pdqsort(pair, 2, sizeof(int), qcmp_int, &alloc);
+  ag_pdqsort(pair, 2, sizeof(int), qcmp_int, &alloc);
   AG_CHECK(pair[0] == 1 && pair[1] == 2);
 
   arena_free(&a);
