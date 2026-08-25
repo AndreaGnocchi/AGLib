@@ -45,11 +45,6 @@
     return true;                                                                                  \
   }                                                                                               \
                                                                                                   \
-  static inline void name##_destroy(name* hm) {                                                   \
-    if (!hm) return;                                                                              \
-    pthread_mutex_destroy(&hm->lock);                                                             \
-  }                                                                                               \
-                                                                                                  \
   static inline bool _##name##_insert_nolock(name* hm, Tk key, Tv val) {                          \
     if (!hm) return false;                                                                        \
                                                                                                   \

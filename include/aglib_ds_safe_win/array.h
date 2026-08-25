@@ -32,11 +32,6 @@
     return true;                                                                   \
   }                                                                                \
                                                                                    \
-  static inline void name##_destroy(name* arr) {                                   \
-    if (!arr) return;                                                              \
-    DeleteCriticalSection(&arr->lock);                                             \
-  }                                                                                \
-                                                                                   \
   static inline bool name##_push(name* arr, T items) {                             \
     if (!arr || !arr->a) return false;                                             \
                                                                                    \

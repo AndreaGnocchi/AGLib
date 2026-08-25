@@ -15,10 +15,6 @@
     return Queue##name##_init(a, q);                                                              \
   }                                                                                               \
                                                                                                   \
-  static inline void name##_destroy(name* q) {                                                    \
-    Queue##name##_destroy(q);                                                                     \
-  }                                                                                               \
-                                                                                                  \
   static inline bool name##_enqueue(name* q, T val) {                                             \
     return Queue##name##_push_tail(q, val);                                                       \
   }                                                                                               \

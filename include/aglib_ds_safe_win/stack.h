@@ -15,10 +15,6 @@
     return Stack##name##_init(a, s);                        \
   }                                                         \
                                                             \
-  static inline void name##_destroy(name* s) {              \
-    Stack##name##_destroy(s);                               \
-  }                                                         \
-                                                            \
   static inline bool name##_push(name* s, T val) {          \
     return Stack##name##_push_head(s, val);                 \
   }                                                         \

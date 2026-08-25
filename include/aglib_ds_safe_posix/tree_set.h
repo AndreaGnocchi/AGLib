@@ -15,10 +15,6 @@
     return name##_tmap_##_init(a, s);                                                             \
   }                                                                                               \
                                                                                                   \
-  static inline void name##_destroy(name* s) {                                                    \
-    name##_tmap_##_destroy(s);                                                                    \
-  }                                                                                               \
-                                                                                                  \
   static inline bool name##_insert(name* s, T key) {                                              \
     return name##_tmap_##_insert(s, key, true);                                                   \
   }                                                                                               \
