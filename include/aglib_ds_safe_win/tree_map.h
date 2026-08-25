@@ -44,11 +44,6 @@ typedef enum {black, red} eColor;
     return true;                                                                    \
   }                                                                                 \
                                                                                     \
-  static inline void name##_destroy(name* t) {                                      \
-    if (!t) return;                                                                 \
-    DeleteCriticalSection(&t->lock);                                                \
-  }                                                                                 \
-                                                                                    \
   static inline void _##name##_left_rotate(name* t, name##Node* x) {                \
     if (!t || !x) return;                                                           \
                                                                                     \

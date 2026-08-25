@@ -15,10 +15,6 @@
     return Heap##name##_init(a, h, initCap);                                                      \
   }                                                                                               \
                                                                                                   \
-  static inline void name##_destroy(name* h) {                                                    \
-    Heap##name##_destroy(h);                                                                      \
-  }                                                                                               \
-                                                                                                  \
   static inline void _##name##_heap_swap(name* h, size_t i, size_t j) {                           \
     T tmp = h->items[i]; h->items[i] = h->items[j]; h->items[j] = tmp;                            \
   }                                                                                               \

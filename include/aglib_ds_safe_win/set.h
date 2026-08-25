@@ -15,10 +15,6 @@
     return name##_map_##_init(a, s, initCap);                               \
   }                                                                         \
                                                                             \
-  static inline void name##_destroy(name* s) {                              \
-    name##_map_##_destroy(s);                                               \
-  }                                                                         \
-                                                                            \
   static inline bool name##_insert(name* s, T key) {                        \
     return name##_map_##_insert(s, key, true);                              \
   }                                                                         \

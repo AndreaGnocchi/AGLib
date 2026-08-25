@@ -35,11 +35,6 @@
     return true;                                                                  \
   }                                                                               \
                                                                                   \
-  static inline void name##_destroy(name* list) {                                 \
-    if (!list) return;                                                            \
-    DeleteCriticalSection(&list->lock);                                           \
-  }                                                                               \
-                                                                                  \
   static inline name##Node* _##name##_alloc_node(name* list, T val) {             \
     if (!list || !list->a) return NULL;                                           \
                                                                                   \

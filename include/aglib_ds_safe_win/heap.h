@@ -1,4 +1,4 @@
-#ifndef AG_LIB_DS_HEAP
+ #ifndef AG_LIB_DS_HEAP
 #define AG_LIB_DS_HEAP
 
 #include <string.h>
@@ -13,10 +13,6 @@
                                                                             \
   static inline bool name##_init(sAllocator* a, name* h, size_t initCap) {  \
     return Heap##name##_init(a, h, initCap);                                \
-  }                                                                         \
-                                                                            \
-  static inline void name##_destroy(name* h) {                              \
-    Heap##name##_destroy(h);                                                \
   }                                                                         \
                                                                             \
   static inline void _##name##_heap_swap(name* h, size_t i, size_t j) {     \
