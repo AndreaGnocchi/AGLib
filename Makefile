@@ -78,21 +78,28 @@ LINUX_SRCS = $(COMMON_SRCS) src/aglib_arena.c src/aglib_slab.c src/aglib_io_posi
 MAC_SRCS   = $(COMMON_SRCS) src/aglib_arena.c src/aglib_slab.c src/aglib_io_posix.c src/aglib_io_mac.c
 WIN_SRCS   = $(COMMON_SRCS) src/aglib_arena.c src/aglib_arena_win.c src/aglib_slab.c src/aglib_slab_win.c src/aglib_io_win.c
 
-TEST_SRCS = tests/test_main.c            \
-            tests/test_framework.c       \
-            tests/test_arena.c           \
-            tests/test_algo.c            \
-            tests/test_io.c              \
-            tests/test_ds_array.c        \
-            tests/test_ds_string.c       \
-            tests/test_ds_linked_list.c  \
-            tests/test_ds_stack.c        \
-            tests/test_ds_queue.c        \
-            tests/test_ds_heap.c         \
-            tests/test_ds_map.c          \
-            tests/test_ds_set.c          \
-            tests/test_ds_tree_map.c     \
-            tests/test_ds_tree_set.c     \
+TEST_SRCS = tests/test_main.c              \
+            tests/test_framework.c         \
+            tests/test_arena.c             \
+            tests/test_slab.c              \
+            tests/test_algo.c              \
+            tests/test_io.c                \
+            tests/test_io_slab.c           \
+            tests/test_ds_array.c          \
+            tests/test_ds_string.c         \
+            tests/test_ds_linked_list.c    \
+            tests/test_ds_linked_list_slab.c \
+            tests/test_ds_stack.c          \
+            tests/test_ds_stack_slab.c     \
+            tests/test_ds_queue.c          \
+            tests/test_ds_queue_slab.c     \
+            tests/test_ds_heap.c           \
+            tests/test_ds_map.c            \
+            tests/test_ds_set.c            \
+            tests/test_ds_tree_map.c       \
+            tests/test_ds_tree_map_slab.c  \
+            tests/test_ds_tree_set.c       \
+            tests/test_ds_tree_set_slab.c  \
             tests/test_thread_safety.c
 
 define PLATFORM_RULES
