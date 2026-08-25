@@ -91,7 +91,7 @@ void  slab_free_all(sSlab* s);
 | `slab_reset` | Rebuilds the free list so every block is available again, without releasing the backing memory. |
 | `slab_free_all` | Releases the backing memory and zeroes the slab struct. |
 
-A slab can only satisfy requests up to `blockSize` bytes, so it cannot back the growable containers below (`DynamicArray`, `LinkedList`, `Map`, `TreeMap`, and anything built on them) — their `_init` functions reject a slab-backed allocator outright. Use a slab directly for fixed-size, frequently allocated/freed objects, or via `ag_alloc`/`ag_free` for single fixed-size values.
+A slab can only satisfy requests up to `blockSize` bytes, so it cannot back containers whose backing storage grows as a single resizable block — `DynamicArray` and `Map` (and anything built on them, e.g. `String`, `Heap`, `Set`) — their `_init` functions reject a slab-backed allocator outright. `LinkedList` and `TreeMap` (and `TreeSet`, built on `TreeMap`) allocate fixed-size nodes instead, so they accept a slab-backed allocator just fine. Use a slab directly for fixed-size, frequently allocated/freed objects, or via `ag_alloc`/`ag_free` for single fixed-size values.
 
 ---
 
@@ -292,7 +292,7 @@ Generates a doubly linked list of type `T` named `name`. Each node (`nameNode`) 
 
 | Function | Description |
 |---|---|
-| `name_init(sAllocator* a, name* list)` | Initialises an empty list. Fails if `a` wraps a slab. |
+| `name_init(sAllocator* a, name* list)` | Initialises an empty list. Accepts a slab-backed allocator (each node is a single fixed-size block). |
 | `name_push_head / push_tail` | Prepends or appends a value. |
 | `name_pop_head / pop_tail` | Removes and optionally returns the head or tail value. |
 | `name_peek_head / peek_tail` | Reads the head or tail value without removing it. |
@@ -459,7 +459,7 @@ An ordered map from keys of type `Tk` to values of type `Tv`, implemented as a r
 
 | Function | Description |
 |---|---|
-| `name_init(sAllocator* a, name* t)` | Initialises an empty tree. Fails if `a` wraps a slab. |
+| `name_init(sAllocator* a, name* t)` | Initialises an empty tree. Accepts a slab-backed allocator (each node is a single fixed-size block). |
 | `name_insert(name* t, Tk key, Tv val)` | Inserts a new key-value pair. Returns `false` if the key already exists. |
 | `name_find(name* t, Tk key, Tv* out)` | Looks up a key. Writes the value to `out` if found. Returns `false` if not found. |
 | `name_remove(name* t, Tk key)` | Removes a key, rebalancing the tree. Returns `false` if the key is not present. |
@@ -508,7 +508,7 @@ An ordered set built on top of `TreeMap` with `bool` as the value type. Like `Tr
 
 | Function | Description |
 |---|---|
-| `name_init(sAllocator* a, name* s)` | Initialises an empty set. |
+| `name_init(sAllocator* a, name* s)` | Initialises an empty set. Built on `TreeMap`, so it accepts a slab-backed allocator too. |
 | `name_insert(name* s, T key)` | Adds a key to the set. Returns `false` if already present. |
 | `name_contains(name* s, T key)` | Returns `true` if the key is present. |
 | `name_remove(name* s, T key)` | Removes a key. Returns `false` if not present. |
@@ -537,7 +537,7 @@ Unlike the unsafe variants, `name_free` on a safe container both releases its me
 
 **Composite containers** (`String`, `Heap`, `Stack`, `Queue`, `Set`, `TreeSet`) are built directly on top of `DynamicArray`, `LinkedList`, `Map`, or `TreeMap` and share the exact same struct — and therefore the exact same lock — as their underlying container. Internally this uses a recursive lock, so a composite operation (e.g. `Heap_push`, which both appends to the backing array and sifts the heap) locks once for the entire operation and safely re-enters the lock when it calls through to the underlying container's own locked functions. The practical effect is that the whole composite operation is atomic, not just the inner call.
 
-**What is *not* covered:** the allocator backing a safe container is not itself synchronized. If multiple threads share one container that's fine — its lock serializes all access, including the allocations it triggers. But if you share a single `sAllocator`/`sArena`/`sSlab` directly across *independent* containers (or call `ag_alloc` yourself) from multiple threads, you must synchronize that access yourself, or give each thread/container its own allocator. 
+**What is *not* covered:** the allocator backing a safe container is not itself synchronized. If multiple threads share one container that's fine — its lock serializes all access, including the allocations it triggers. This holds for a slab-backed allocator too: a single thread-safe `LinkedList`/`TreeMap`/`TreeSet` instance built on one `sSlab` is safe to hit from multiple threads, because the container's lock is what serializes the underlying `slab_alloc`/`slab_free` calls. But if you share a single `sAllocator`/`sArena`/`sSlab` directly across *independent* containers (or call `ag_alloc`/`slab_alloc` yourself) from multiple threads, you must synchronize that access yourself, or give each thread/container its own allocator. 
 
 **Example**
 ```c
@@ -794,6 +794,20 @@ CI (`.github/workflows/ci.yml`) builds and runs both `make test` and `make test-
 ## Testing
 
 The test suite lives in `tests/` — a `test_main.c` driver plus one file per module (arena, algorithms, I/O, and every data structure), built on a small custom `test_framework.h`/`.c`. Run it after any change:
+
+In addition to `test_slab.c` (the slab allocator itself), the containers that accept a slab-backed allocator each get their own dedicated slab test file, exercising the same behaviour as their default-allocator counterpart but backed by an `sSlab` instead — including allocation exhaustion once the slab's page-rounded capacity is reached:
+
+| File | Covers |
+|---|---|
+| `test_slab.c` | `slab_init`/`slab_alloc`/`slab_free`/`slab_reset`/`slab_free_all`, including page-rounded capacity |
+| `test_io_slab.c` | `aglib_io` functions run against a slab-backed allocator |
+| `test_ds_linked_list_slab.c` | `LinkedList` backed by a slab |
+| `test_ds_stack_slab.c` | `Stack` backed by a slab |
+| `test_ds_queue_slab.c` | `Queue` backed by a slab |
+| `test_ds_tree_map_slab.c` | `TreeMap` backed by a slab |
+| `test_ds_tree_set_slab.c` | `TreeSet` backed by a slab |
+
+`test_thread_safety.c` additionally covers a slab shared by a single thread-safe container under concurrent access (see [Thread-safe variants](#thread-safe-variants)).
 
 ```bash
 make test              # default (non-thread-safe) data structures, this host's platform

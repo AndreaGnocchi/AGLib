@@ -23,7 +23,7 @@
   } name;                                                                                         \
                                                                                                   \
   static inline bool name##_init(sAllocator* a, name* list) {                                     \
-    if (!a || !list || a->type == SLAB) return false;                                             \
+    if (!a || !list) return false;                                                                \
                                                                                                   \
     list->a    = a;                                                                               \
     list->head = NULL;                                                                            \
