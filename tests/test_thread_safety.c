@@ -125,6 +125,120 @@ static void test_map_concurrent_writes(void) {
   arena_free(&a);
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// DynamicArray: concurrent pop.
+//
+// Push is already exercised concurrently above (via map_worker), so this
+// focuses on _pop: N threads race to pop from one shared array with no
+// coordination between them, so per-thread counts aren't fixed - but the
+// union of everything popped must account for every pushed value exactly
+// once, with nothing lost, duplicated, or corrupted by the lock.
+// ═══════════════════════════════════════════════════════════════════════
+
+typedef struct {
+  int id;
+  ThreadSafeArray* arr;
+} sArrayPushArgs;
+
+static AG_THREAD_FN_SIG(array_push_only_worker, argRaw) {
+  sArrayPushArgs* args = (sArrayPushArgs*)argRaw;
+
+  for (int i = 0; i < OPS_PER_THREAD; i++) {
+    int val = args->id * OPS_PER_THREAD + i;
+    ThreadSafeArray_push(args->arr, val);
+  }
+
+  AG_THREAD_RETURN(0);
+}
+
+typedef struct {
+  ThreadSafeArray* arr;
+  int* buf;      // upper-bounded scratch buffer for this thread's pops
+  int  popped;
+} sArrayPopArgs;
+
+static AG_THREAD_FN_SIG(array_pop_worker, argRaw) {
+  sArrayPopArgs* args = (sArrayPopArgs*)argRaw;
+
+  int val;
+  while (ThreadSafeArray_pop(args->arr, &val))
+    args->buf[args->popped++] = val;
+
+  AG_THREAD_RETURN(0);
+}
+
+static void test_array_concurrent_push_then_pop(void) {
+  sArena a;
+  AG_CHECK(arena_init(&a, MB(16)));
+  sAllocator alloc = use_arena(&a);
+
+  ThreadSafeArray arr;
+  AG_CHECK(ThreadSafeArray_init(&alloc, &arr, 64));
+
+  const int TOTAL = N_THREADS * OPS_PER_THREAD;
+
+  // Phase 1 - concurrent pushes, disjoint value ranges per thread.
+  sArrayPushArgs pushArgs[N_THREADS];
+  ag_thread_t    threads[N_THREADS];
+
+  for (int i = 0; i < N_THREADS; i++) {
+    pushArgs[i].id  = i;
+    pushArgs[i].arr = &arr;
+    threads[i]      = ag_thread_start(array_push_only_worker, &pushArgs[i]);
+  }
+  for (int i = 0; i < N_THREADS; i++)
+    ag_thread_join(threads[i]);
+
+  AG_CHECK_EQ_INT(arr.size, (size_t)TOTAL);
+
+  // Phase 2 - every thread pops until the array reports empty. Threads
+  // race for whichever value is currently on top, so give each one a
+  // TOTAL-sized scratch buffer since any single thread could in theory
+  // drain the whole array.
+  int*          buf[N_THREADS];
+  sArrayPopArgs popArgs[N_THREADS];
+
+  for (int i = 0; i < N_THREADS; i++) {
+    buf[i] = (int*)calloc((size_t)TOTAL, sizeof(int));
+    AG_CHECK(buf[i] != NULL);
+
+    popArgs[i].arr    = &arr;
+    popArgs[i].buf    = buf[i];
+    popArgs[i].popped = 0;
+    threads[i]        = ag_thread_start(array_pop_worker, &popArgs[i]);
+  }
+  for (int i = 0; i < N_THREADS; i++)
+    ag_thread_join(threads[i]);
+
+  AG_CHECK(ThreadSafeArray_is_empty(&arr));
+  AG_CHECK_EQ_INT(arr.size, 0);
+
+  bool* seen = (bool*)calloc((size_t)TOTAL, sizeof(bool));
+  AG_CHECK(seen != NULL);
+
+  int totalPopped = 0;
+  for (int i = 0; i < N_THREADS; i++) {
+    for (int j = 0; j < popArgs[i].popped; j++) {
+      int v = buf[i][j];
+      AG_CHECK(v >= 0 && v < TOTAL);
+      AG_CHECK(!seen[v]);
+      seen[v] = true;
+      totalPopped++;
+    }
+    free(buf[i]);
+  }
+  AG_CHECK_EQ_INT(totalPopped, TOTAL);
+
+  bool allPresent = true;
+  for (int i = 0; i < TOTAL; i++)
+    if (!seen[i]) allPresent = false;
+  AG_CHECK(allPresent);
+
+  free(seen);
+  ThreadSafeArray_free(&arr);
+  arena_free(&a);
+}
+
 typedef struct {
   ThreadSafeMap* map;
   int start, end;
@@ -395,6 +509,7 @@ static void test_tree_map_slab_concurrent_delete(void) {
 void run_thread_safety_tests(void) {
   test_map_concurrent_writes();
   test_map_concurrent_delete();
+  test_array_concurrent_push_then_pop();
 
   test_stack_slab_concurrent_push();
   test_tree_map_slab_concurrent_writes();

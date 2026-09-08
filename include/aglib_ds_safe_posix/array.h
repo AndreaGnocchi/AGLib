@@ -41,7 +41,7 @@
                                                                                                   \
      pthread_mutex_lock(&arr->lock);                                                              \
                                                                                                   \
-    if (arr->size >= arr->capacity) {                                                              \
+    if (arr->size >= arr->capacity) {                                                             \
       if (arr->capacity > SIZE_MAX / 2) {                                                         \
         pthread_mutex_unlock(&arr->lock);                                                         \
         return false;                                                                             \
@@ -60,6 +60,23 @@
     }                                                                                             \
                                                                                                   \
     arr->items[arr->size++] = items;                                                              \
+    pthread_mutex_unlock(&arr->lock);                                                             \
+    return true;                                                                                  \
+  }                                                                                               \
+                                                                                                  \
+  static inline bool name##_pop(name* arr, T* outVal) {                                           \
+    if (!arr || !arr->items) return false;                                                        \
+                                                                                                  \
+    pthread_mutex_lock(&arr->lock);                                                               \
+                                                                                                  \
+    if (arr->size == 0) {                                                                         \
+      pthread_mutex_unlock(&arr->lock);                                                           \
+      return false;                                                                               \
+    }                                                                                             \
+                                                                                                  \
+    arr->size--;                                                                                  \
+    if (outVal) *outVal = arr->items[arr->size];                                                  \
+                                                                                                  \
     pthread_mutex_unlock(&arr->lock);                                                             \
     return true;                                                                                  \
   }                                                                                               \

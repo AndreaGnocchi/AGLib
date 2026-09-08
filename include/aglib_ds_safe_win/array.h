@@ -60,6 +60,23 @@
     return true;                                                                   \
   }                                                                                \
                                                                                    \
+  static inline bool name##_pop(name* arr, T* outVal) {                            \
+    if (!arr || !arr->items) return false;                                         \
+                                                                                   \
+    EnterCriticalSection(&arr->lock);                                              \
+                                                                                   \
+    if (arr->size == 0) {                                                          \
+      LeaveCriticalSection(&arr->lock);                                            \
+      return false;                                                                \
+    }                                                                              \
+                                                                                   \
+    arr->size--;                                                                   \
+    if (outVal) *outVal = arr->items[arr->size];                                   \
+                                                                                   \
+    LeaveCriticalSection(&arr->lock);                                              \
+    return true;                                                                   \
+  }                                                                                \
+                                                                                   \
   static inline bool name##_is_empty(name* arr) {                                  \
     if (!arr) return true;                                                         \
                                                                                    \

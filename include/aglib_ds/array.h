@@ -48,6 +48,15 @@
     return true;                                                                                  \
   }                                                                                               \
                                                                                                   \
+  static inline bool name##_pop(name* arr, T* outVal) {                                           \
+    if (!arr || !arr->items || arr->size == 0) return false;                                      \
+                                                                                                  \
+    arr->size--;                                                                                  \
+    if (outVal) *outVal = arr->items[arr->size];                                                  \
+                                                                                                  \
+    return true;                                                                                  \
+  }                                                                                               \
+                                                                                                  \
   static inline bool name##_is_empty(name* arr) {                                                 \
     if (!arr) return true;                                                                        \
     return arr->size == 0;                                                                        \
