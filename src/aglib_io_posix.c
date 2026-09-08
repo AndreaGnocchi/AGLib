@@ -1,5 +1,14 @@
+#ifndef THREAD_SAFE_AGLIB_DS
+
+#include "../include/aglib_ds/stack.h"
+
+#else
+
+#include "../include/aglib_ds_safe_posix/stack.h"
+
+#endif // THREAD_SAFE_AGLIB_DS
+
 #include "../include/aglib_io_posix.h"
-#include "../include/aglib_ds.h"
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>

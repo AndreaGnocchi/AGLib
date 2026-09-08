@@ -192,6 +192,7 @@ Generates a growable array of type `T` named `name`. When the array is full, a n
 |---|---|
 | `name_init(sAllocator* a, name* arr, size_t initCap)` | Initialises the array with an initial capacity. Fails if `a` wraps a slab. |
 | `name_push(name* arr, T item)` | Appends an item, doubling capacity if needed. Returns `false` on allocation failure. |
+| `name_pop(name* arr, T* outVal)` | Removes the last item in O(1), no shift, capacity untouched. Writes it to `outVal` if non-`NULL`. Returns `false` if the array is empty. |
 | `name_is_empty(name* arr)` | Returns `true` if the array has no items. |
 | `name_clear(name* arr)` | Resets size to zero without releasing the backing memory. |
 | `name_free(name* arr)` | Frees the backing memory through the allocator and zeroes the struct. |
@@ -211,6 +212,9 @@ IntArray_push(&arr, 7);
 
 for (size_t i = 0; i < arr.size; i++)
     printf("%d\n", arr.items[i]);
+
+int last;
+IntArray_pop(&arr, &last);  // last == 7
 
 IntArray_free(&arr);
 arena_free(&a);
