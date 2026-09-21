@@ -1,6 +1,6 @@
 # aglib
 
-A lightweight, cross-platform C utility library providing arena- and slab-based memory management (behind a single generic allocator interface), generic data structures, sorting algorithms, and I/O utilities.
+A lightweight, cross-platform C utility library providing arena-based and slab-based memory management (behind a single generic allocator interface), generic data structures, sorting algorithms, and I/O utilities.
 
 > **Platform support:** Linux, macOS, and Windows. The `Makefile` can build and test all three from any single host (via cross-compilation), and CI runs the full suite on all three.
 
@@ -29,6 +29,7 @@ A lightweight, cross-platform C utility library providing arena- and slab-based 
 - [Helpers](#helpers)
 - [Building](#building)
 - [Testing](#testing)
+- [License](#license)
 - [Credits](#credits)
 
 ---
@@ -46,13 +47,16 @@ Every data structure, algorithm, and I/O function that needs to allocate memory 
 A linear allocator backed by an OS-level memory mapping (`mmap` on Linux/macOS, `VirtualAlloc` on Windows). Allocations are O(1) and freeing is done all at once by resetting or releasing the arena. Temporary sub-arenas allow scoped allocation within a larger arena.
 
 ```c
-bool       arena_init         (sArena* a, size_t initSize);
-void*      arena_alloc        (sArena* a, size_t size, bool zero);
-void*      arena_alloc_aligned(sArena* a, size_t size, bool zero, size_t alignment);
-void       arena_reset        (sArena* a);
-void       arena_free         (sArena* a);
-sTempArena arena_temp_start   (sArena* a);
-void       arena_temp_end     (sTempArena temp);
+bool       arena_init           (sArena* a, size_t initSize);
+void*      arena_alloc          (sArena* a, size_t size, bool zero);
+void*      arena_alloc_aligned  (sArena* a, size_t size, bool zero, size_t alignment);
+void       arena_reset          (sArena* a);
+void       arena_free           (sArena* a);
+sTempArena arena_temp_start     (sArena* a);
+void       arena_temp_end       (sTempArena temp);
+void*      arena_realloc        (sArena* a, void* oldPtr, size_t oldSize, size_t newSize);
+void*      arena_realloc_aligned(sArena* a, void* oldPtr, size_t oldSize, size_t newSize, size_t alignment);
+char*      arena_strdup         (sArena* a, const char* str);
 ```
 
 | Function | Description |
@@ -64,6 +68,9 @@ void       arena_temp_end     (sTempArena temp);
 | `arena_free` | Releases the underlying OS-level mapping and zeroes the arena struct. |
 | `arena_temp_start` | Saves the current arena offset and returns a `sTempArena` checkpoint. |
 | `arena_temp_end` | Restores the arena to the offset saved by `arena_temp_start`, freeing all allocations made since. |
+| `arena_realloc` | Grows or shrinks an allocation using the default alignment. If `oldPtr` is the arena's most recent allocation, it's extended or shrunk in place; otherwise a new block is allocated and the overlapping bytes are copied. Returns `NULL` on failure. |
+| `arena_realloc_aligned` | Same as `arena_realloc` but with an explicit power-of-two `alignment`. |
+| `arena_strdup` | Duplicates a string into the arena. Returns `NULL` on failure or if `str` is `NULL`. |
 
 An arena never frees individual allocations — `ag_free` on an arena-backed `sAllocator` is a no-op. Reclaim memory by resetting or freeing the whole arena.
 
@@ -81,6 +88,8 @@ void* slab_alloc   (sSlab* s, bool   zero);
 void  slab_free    (sSlab* s, void*  ptr);
 void  slab_reset   (sSlab* s);
 void  slab_free_all(sSlab* s);
+void* slab_realloc (sSlab* s, void*  oldPtr, size_t newSize);
+char* slab_strdup  (sSlab* s, const char* str);
 ```
 
 | Function | Description |
@@ -90,6 +99,8 @@ void  slab_free_all(sSlab* s);
 | `slab_free` | Returns a block to the free list. |
 | `slab_reset` | Rebuilds the free list so every block is available again, without releasing the backing memory. |
 | `slab_free_all` | Releases the backing memory and zeroes the slab struct. |
+| `slab_realloc` | Resizes a block in place: since every block is a fixed `blockSize`, this succeeds unchanged if `newSize` still fits, and returns `NULL` if it doesn't. |
+| `slab_strdup` | Duplicates a string into a slab block. Returns `NULL` on failure, if `str` is `NULL`, or if the string doesn't fit in `blockSize`. |
 
 A slab can only satisfy requests up to `blockSize` bytes, so it cannot back containers whose backing storage grows as a single resizable block — `DynamicArray` and `Map` (and anything built on them, e.g. `String`, `Heap`, `Set`) — their `_init` functions reject a slab-backed allocator outright. `LinkedList` and `TreeMap` (and `TreeSet`, built on `TreeMap`) allocate fixed-size nodes instead, so they accept a slab-backed allocator just fine. Use a slab directly for fixed-size, frequently allocated/freed objects, or via `ag_alloc`/`ag_free` for single fixed-size values.
 
@@ -123,7 +134,8 @@ sAllocator use_std  (void      );
 
 void* ag_alloc  (sAllocator* allocator, size_t size, bool zero);
 void  ag_free   (sAllocator* allocator, void*  ptr);
-void* ag_realloc(sAllocator* allocator, void*  oldPtr, size_t oldSize, size_t newSize, bool zero);
+void* ag_realloc(sAllocator* allocator, void*  oldPtr, size_t oldSize, size_t newSize);
+char* ag_strdup (sAllocator* allocator, const char* str);
 void  ag_reset  (sAllocator* allocator);
 void  ag_destroy(sAllocator* allocator);
 ```
@@ -133,7 +145,8 @@ void  ag_destroy(sAllocator* allocator);
 | `use_arena` / `use_slab` / `use_std` | Wrap an existing `sArena*` / `sSlab*` / the standard allocator into an `sAllocator` value. |
 | `ag_alloc` | Allocates `size` bytes through the wrapped allocator. Returns `NULL` on failure (including a slab request larger than its block size). |
 | `ag_free` | Frees a single allocation. A no-op for `ARENA` (arenas are freed in bulk). |
-| `ag_realloc` | Grows or shrinks an allocation, copying the overlapping bytes. For `STD` this delegates to `realloc`; for `ARENA`/`SLAB` it allocates fresh and copies. |
+| `ag_realloc` | Grows or shrinks an allocation. Delegates to `arena_realloc` / `slab_realloc` for `ARENA`/`SLAB`, and to the standard `realloc` for `STD`. |
+| `ag_strdup` | Duplicates a string through the wrapped allocator. Returns `NULL` on failure or if `str` is `NULL`. |
 | `ag_reset` | Resets the wrapped allocator (`arena_reset` / `slab_reset`), retaining the backing memory. No-op for `STD`. |
 | `ag_destroy` | Releases the wrapped allocator's backing memory entirely (`arena_free` / `slab_free_all`). No-op for `STD`. |
 
@@ -822,6 +835,12 @@ make test-safe-linux / test-safe-win / test-safe-mac
 ```
 
 Each run prints a per-module pass/fail summary followed by an overall result; the process exits non-zero if any assertion failed.
+
+---
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
 
 ---
 
